@@ -42,21 +42,13 @@ class ClickerGame:
                                 font=("Segoe UI", 9, "bold"))
         self.coins_label = self.canvas.create_text(260, 194, text="", fill="white",
                                                     font=("Segoe UI", 23, "bold"))
-        self.coin_parts = []
-        self.coin_parts.append(self.canvas.create_oval(145, 244, 375, 474, fill="#8b4d14", outline="#f4a62a", width=5))
-        self.coin_parts.append(self.canvas.create_oval(158, 257, 362, 461, fill="#f6ba3c", outline="#ffdb77", width=4))
-        self.coin_parts.append(self.canvas.create_oval(175, 274, 345, 444, outline="#da8c1e", width=3))
-        self.coin_parts.append(self.canvas.create_text(260, 348, text="$", fill="#fff0b3", font=("Segoe UI", 82, "bold")))
-        self.coin_base_coords = {part: self.canvas.coords(part) for part in self.coin_parts}
-        self.canvas.bind("<Button-1>", self.on_canvas_click)
+        self.coin_animation_job = None
+        self.particle_jobs = {}
+        self.create_coin_parts()
         self.shop_button = tk.Button(root, text="🛍  СКИНЫ", command=self.open_shop,
             font=("Segoe UI", 9, "bold"), bg="#293b53", fg="white",
             activebackground="#3b5371", relief="flat", cursor="hand2", padx=12, pady=6, bd=0)
         self.canvas.create_window(430, 48, window=self.shop_button)
-        self.coin_scale = 1.0
-        self.animation_id = 0
-        self.coin_animation_job = None
-        self.particle_jobs = {}
         self.canvas.create_text(260, 499, text="НАЖМИ НА МОНЕТУ", fill="#dce5f2",
                                 font=("Segoe UI", 11, "bold"))
         self.canvas.create_rectangle(42, 526, 478, 620, fill="#1b293b", outline="#2a3a50", width=2)
@@ -73,77 +65,78 @@ class ClickerGame:
         self.refresh()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
-    def on_canvas_click(self, event):
-        x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-        if 145 <= x <= 375 and 244 <= y <= 474:
-            self.on_coin_click()
+    def create_coin_parts(self):
+        # Remove the previous visual layers before rebuilding after the shop closes.
+        for old_part in getattr(self, "coin_parts", []):
+            self.canvas.delete(old_part)
+        self.coin_parts = [
+            self.canvas.create_oval(145, 244, 375, 474, fill="#8b4d14", outline="#f4a62a", width=5),
+            self.canvas.create_oval(158, 257, 362, 461, fill="#f6ba3c", outline="#ffdb77", width=4),
+            self.canvas.create_oval(175, 274, 345, 444, outline="#da8c1e", width=3),
+            self.canvas.create_text(260, 348, text="$", fill="#fff0b3", font=("Segoe UI", 82, "bold")),
+        ]
+        self.coin_base_coords = {part: self.canvas.coords(part) for part in self.coin_parts}
+        for part in self.coin_parts:
+            self.canvas.tag_bind(part, "<Button-1>", self.on_coin_click)
+        self.apply_skin()
 
     def on_coin_click(self, event=None):
         self.coins += self.per_click
         self.refresh()
-        self.animation_id += 1
-        animation_id = self.animation_id
         if self.coin_animation_job is not None:
             try:
                 self.root.after_cancel(self.coin_animation_job)
             except tk.TclError:
                 pass
-        self.animate_coin(animation_id, 0)
+        self.animate_coin(0)
         return "break"
 
-    def animate_coin(self, animation_id, frame):
-        if animation_id != self.animation_id:
-            return
-        # Set absolute coordinates each frame to avoid accumulated scale drift.
-        scales = (0.68, 0.78, 0.90, 1.0)
-        target = scales[min(frame, len(scales) - 1)]
+    def animate_coin(self, frame):
+        # Absolute coordinates prevent scale drift after repeated clicks or shop visits.
+        scales = (0.90, 0.86, 0.90, 0.94, 0.98, 1.0)
+        scale = scales[min(frame, len(scales) - 1)]
+        symbol = self.coin_parts[3]
         for part, base in self.coin_base_coords.items():
+            if part == symbol:
+                self.canvas.coords(part, *base)
+                self.canvas.itemconfigure(
+                    part, font=("Segoe UI", max(12, round(82 * scale)), "bold"))
+                continue
             coords = []
             for index, value in enumerate(base):
                 center = 260 if index % 2 == 0 else 359
-                coords.append(center + (value - center) * target)
+                coords.append(center + (value - center) * scale)
             self.canvas.coords(part, *coords)
-
         if frame == 0:
             self.spawn_particles()
         if frame < len(scales) - 1:
-            self.coin_animation_job = self.root.after(
-                45, lambda: self.animate_coin(animation_id, frame + 1))
+            self.coin_animation_job = self.root.after(70, lambda: self.animate_coin(frame + 1))
         else:
             self.coin_animation_job = None
 
     def spawn_particles(self):
-        # White sparkles fly outward from the coin and fade by shrinking away.
         import math
-        for i in range(18):
-            angle = (2 * math.pi * i / 18) - math.pi / 2
-            x, y = 260 + math.cos(angle) * 92, 359 + math.sin(angle) * 92
+        for i in range(16):
+            angle = 2 * math.pi * i / 16 - math.pi / 2
+            x, y = 260 + math.cos(angle) * 88, 359 + math.sin(angle) * 88
             particle = self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3,
                                                fill="white", outline="")
             self.animate_particle(particle, math.cos(angle), math.sin(angle), 0)
 
     def animate_particle(self, particle, dx, dy, frame):
-        if frame >= 14:
+        if frame >= 12:
             self.canvas.delete(particle)
             self.particle_jobs.pop(particle, None)
             return
-        self.canvas.move(particle, dx * 9, dy * 9)
+        self.canvas.move(particle, dx * 8, dy * 8)
         coords = self.canvas.coords(particle)
         if coords:
             self.canvas.scale(particle, (coords[0] + coords[2]) / 2,
                               (coords[1] + coords[3]) / 2, 0.88, 0.88)
         self.particle_jobs[particle] = self.root.after(
-            20, lambda: self.animate_particle(particle, dx, dy, frame + 1))
+            22, lambda: self.animate_particle(particle, dx, dy, frame + 1))
 
-    def apply_skin(self):
-        skin = self.skins[self.active_skin]
-        self.canvas.itemconfig(self.coin_parts[0], fill=skin["outer"])
-        self.canvas.itemconfig(self.coin_parts[1], fill=skin["main"])
-        self.canvas.itemconfig(self.coin_parts[2], outline=skin["rim"])
-        self.canvas.itemconfig(self.coin_parts[3], fill=skin["symbol"], text=skin["mark"])
-
-    def reset_click_animation(self):
-        self.animation_id += 1
+    def stop_click_effects(self):
         if self.coin_animation_job is not None:
             try:
                 self.root.after_cancel(self.coin_animation_job)
@@ -160,12 +153,21 @@ class ClickerGame:
         self.particle_jobs.clear()
         for part, coords in self.coin_base_coords.items():
             self.canvas.coords(part, *coords)
+        if len(self.coin_parts) >= 4:
+            self.canvas.itemconfigure(self.coin_parts[3], font=("Segoe UI", 82, "bold"))
+
+    def apply_skin(self):
+        skin = self.skins[self.active_skin]
+        self.canvas.itemconfig(self.coin_parts[0], fill=skin["outer"])
+        self.canvas.itemconfig(self.coin_parts[1], fill=skin["main"])
+        self.canvas.itemconfig(self.coin_parts[2], outline=skin["rim"])
+        self.canvas.itemconfig(self.coin_parts[3], fill=skin["symbol"], text=skin["mark"])
 
     def open_shop(self):
         if getattr(self, "shop_open", False):
             self.close_shop()
             return
-        self.reset_click_animation()
+        self.stop_click_effects()
         self.shop_open = True
         # The panel is rebuilt each time it opens, so its rows and previews are too.
         self.shop_entries = {}
@@ -188,7 +190,13 @@ class ClickerGame:
         self.refresh_shop()
 
     def refresh_shop(self):
-        if not hasattr(self, "shop_panel") or not self.shop_panel.winfo_exists():
+        panel = getattr(self, "shop_panel", None)
+        if panel is None:
+            return
+        try:
+            if not panel.winfo_exists():
+                return
+        except tk.TclError:
             return
         self.shop_balance.config(text=f"Баланс: {self.coins} монет")
         if not self.shop_entries:
@@ -275,8 +283,9 @@ class ClickerGame:
         self.preview_jobs = {}
         panel = getattr(self, "shop_panel", None)
         self.shop_open = False
-        self.reset_click_animation()
-        self.canvas.bind("<Button-1>", self.on_canvas_click)
+        self.stop_click_effects()
+        for part in self.coin_parts:
+            self.canvas.tag_bind(part, "<Button-1>", self.on_coin_click)
         if panel is not None:
             try:
                 if panel.winfo_exists():
@@ -285,6 +294,7 @@ class ClickerGame:
             except tk.TclError:
                 pass
         self.shop_panel = None
+        self.create_coin_parts()
 
     def buy_or_select_skin(self, key):
         skin = self.skins[key]
@@ -350,6 +360,7 @@ if __name__ == "__main__":
     window = tk.Tk()
     ClickerGame(window)
     window.mainloop()
+
 
 
 
