@@ -1,9 +1,11 @@
 import json
+import sys
 import tkinter as tk
 from pathlib import Path
 
 
-SAVE_FILE = Path(__file__).with_name("clicker_save.json")
+APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+SAVE_FILE = APP_DIR / "clicker_save.json"
 
 
 class ClickerGame:
@@ -45,6 +47,10 @@ class ClickerGame:
         self.coin_animation_job = None
         self.particle_jobs = {}
         self.create_coin_parts()
+        self.settings_button = tk.Button(root, text="⚙", command=self.open_settings,
+            font=("Segoe UI Symbol", 15, "bold"), bg="#293b53", fg="white",
+            activebackground="#3b5371", relief="flat", cursor="hand2", width=3, pady=3, bd=0)
+        self.canvas.create_window(90, 48, window=self.settings_button)
         self.shop_button = tk.Button(root, text="🛍  СКИНЫ", command=self.open_shop,
             font=("Segoe UI", 9, "bold"), bg="#293b53", fg="white",
             activebackground="#3b5371", relief="flat", cursor="hand2", padx=12, pady=6, bd=0)
@@ -55,8 +61,8 @@ class ClickerGame:
         self.canvas.create_text(66, 550, text="⚡", fill="#f4c95d", font=("Segoe UI", 18))
         self.canvas.create_text(104, 548, anchor="w", text="СИЛА КЛИКА", fill="white",
                                 font=("Segoe UI", 11, "bold"))
-        self.canvas.create_text(104, 574, anchor="w", text="Увеличь добычу за нажатие", fill="#91a2ba",
-                                font=("Segoe UI", 9))
+        self.click_power_label = self.canvas.create_text(
+            104, 574, anchor="w", text="", fill="#91a2ba", font=("Segoe UI", 9))
         self.upgrade_button = tk.Button(root, command=self.upgrade, font=("Segoe UI", 10, "bold"),
             bg="#f4bd45", fg="#182235", activebackground="#ffda70", disabledforeground="#777777",
             relief="flat", cursor="hand2", padx=14, pady=8, bd=0)
@@ -64,6 +70,87 @@ class ClickerGame:
         self.apply_skin()
         self.refresh()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
+
+    def open_settings(self):
+        if getattr(self, "settings_open", False):
+            self.close_settings()
+            return
+        if getattr(self, "shop_open", False):
+            self.close_shop()
+        self.settings_open = True
+        self.settings_panel = tk.Frame(self.root, bg="#101827",
+                                       highlightbackground="#40536d", highlightthickness=2)
+        self.settings_panel.place(x=42, y=145, width=436, height=475)
+        tk.Label(self.settings_panel, text="НАСТРОЙКИ", font=("Segoe UI", 20, "bold"),
+                 fg="#f4c95d", bg="#101827").pack(pady=(34, 8))
+        tk.Label(self.settings_panel, text="Управление прогрессом игры", font=("Segoe UI", 10),
+                 fg="#b9c8dc", bg="#101827").pack(pady=(0, 28))
+        tk.Button(self.settings_panel, text="Сбросить прогресс", command=self.reset_progress,
+                  font=("Segoe UI", 11, "bold"), bg="#a93e4b", fg="white",
+                  activebackground="#c7505c", relief="flat", cursor="hand2",
+                  padx=18, pady=10, bd=0).pack(pady=8)
+        tk.Button(self.settings_panel, text="←  НАЗАД К ИГРЕ", command=self.close_settings,
+                  font=("Segoe UI", 10, "bold"), bg="#293b53", fg="white",
+                  activebackground="#3b5371", relief="flat", cursor="hand2",
+                  padx=16, pady=8, bd=0).pack(pady=20)
+
+    def close_settings(self):
+        panel = getattr(self, "settings_panel", None)
+        self.settings_open = False
+        if panel is not None:
+            try:
+                if panel.winfo_exists():
+                    panel.place_forget()
+                    panel.destroy()
+            except tk.TclError:
+                pass
+        self.settings_panel = None
+
+    def reset_progress(self):
+        if getattr(self, "reset_confirm_panel", None) is not None:
+            try:
+                if self.reset_confirm_panel.winfo_exists():
+                    return
+            except tk.TclError:
+                pass
+        self.reset_confirm_panel = tk.Frame(
+            self.settings_panel, bg="#1b293b", highlightbackground="#40536d",
+            highlightthickness=2)
+        self.reset_confirm_panel.place(x=28, y=112, width=376, height=205)
+        tk.Label(self.reset_confirm_panel, text="Сбросить прогресс?",
+                 font=("Segoe UI", 15, "bold"), fg="#f4c95d",
+                 bg="#1b293b").pack(pady=(24, 10))
+        tk.Label(self.reset_confirm_panel,
+                 text="Монеты, улучшения и купленные скины. Будут удалены.",
+                 font=("Segoe UI", 10), fg="#d2dced", bg="#1b293b",
+                 justify="center").pack(pady=(0, 16))
+        buttons = tk.Frame(self.reset_confirm_panel, bg="#1b293b")
+        buttons.pack()
+        tk.Button(buttons, text="Сбросить", command=self.confirm_reset,
+                  font=("Segoe UI", 10, "bold"), bg="#a93e4b", fg="white",
+                  activebackground="#c7505c", relief="flat", cursor="hand2",
+                  padx=15, pady=8, bd=0).pack(side="left", padx=6)
+        tk.Button(buttons, text="Отмена", command=self.cancel_reset,
+                  font=("Segoe UI", 10, "bold"), bg="#293b53", fg="white",
+                  activebackground="#3b5371", relief="flat", cursor="hand2",
+                  padx=15, pady=8, bd=0).pack(side="left", padx=6)
+
+    def cancel_reset(self):
+        panel = getattr(self, "reset_confirm_panel", None)
+        if panel is not None:
+            panel.destroy()
+        self.reset_confirm_panel = None
+
+    def confirm_reset(self):
+        self.cancel_reset()
+        self.coins = 0
+        self.per_click = 1
+        self.upgrade_cost = 10
+        self.owned_skins = {"classic"}
+        self.active_skin = "classic"
+        self.apply_skin()
+        self.refresh()
+        self.save_safely()
 
     def create_coin_parts(self):
         # Remove the previous visual layers before rebuilding after the shop closes.
@@ -83,6 +170,7 @@ class ClickerGame:
     def on_coin_click(self, event=None):
         self.coins += self.per_click
         self.refresh()
+        self.save_safely()
         if self.coin_animation_job is not None:
             try:
                 self.root.after_cancel(self.coin_animation_job)
@@ -167,6 +255,8 @@ class ClickerGame:
         if getattr(self, "shop_open", False):
             self.close_shop()
             return
+        if getattr(self, "settings_open", False):
+            self.close_settings()
         self.stop_click_effects()
         self.shop_open = True
         # The panel is rebuilt each time it opens, so its rows and previews are too.
@@ -306,6 +396,7 @@ class ClickerGame:
         self.active_skin = key
         self.apply_skin()
         self.refresh()
+        self.save_safely()
 
     def upgrade(self):
         if self.coins >= self.upgrade_cost:
@@ -313,9 +404,12 @@ class ClickerGame:
             self.per_click += 1
             self.upgrade_cost = int(self.upgrade_cost * 1.7) + 1
             self.refresh()
+            self.save_safely()
 
     def refresh(self):
         self.canvas.itemconfig(self.coins_label, text=f"🪙  {self.coins:,}".replace(",", " "))
+        self.canvas.itemconfig(
+            self.click_power_label, text=f"Сейчас за клик: {self.per_click} монет")
         self.upgrade_button.config(
             text=f"+1  ·  {self.upgrade_cost} 🪙",
             state="normal" if self.coins >= self.upgrade_cost else "disabled")
@@ -339,11 +433,14 @@ class ClickerGame:
                 "owned_skins": sorted(self.owned_skins), "active_skin": self.active_skin}
         SAVE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def close(self):
+    def save_safely(self):
         try:
             self.save_game()
         except OSError:
             pass
+
+    def close(self):
+        self.save_safely()
         for job in getattr(self, "preview_jobs", {}).values():
             try:
                 self.root.after_cancel(job)
