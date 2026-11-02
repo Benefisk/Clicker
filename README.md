@@ -1,17 +1,19 @@
 # Clicker Club
 
-Небольшая игра-кликер на Python с магазином скинов, улучшением клика и сохранением прогресса.
+Игра-кликер для Windows с отдельным стилизованным окном на Pygame: магазин скинов, улучшение силы клика, настройки, сброс прогресса и сохранение.
 
-## Запуск из исходного кода
+## Запуск игры
+
+Самостоятельный файл находится в `dist/ClickerClub.exe`. Python для запуска не нужен.
+Архив с установкой и ярлыками находится в `release/ClickerClub-Installer.zip`.
+
+Прогресс сохраняется в `clicker_save.json` рядом с запущенным файлом.
+
+## Запуск из исходников
 
 ```powershell
+python -m pip install -r requirements.txt
 python clicker.py
 ```
 
-Используются только стандартные библиотеки Python (`tkinter`, `json`, `pathlib`).
-
-## Windows-приложение
-
-Готовый файл находится в `dist/ClickerClub.exe`.
-
-Сохранение прогресса создаётся рядом с запускаемым файлом в `clicker_save.json`.
+Сборка Windows-файла: `pyinstaller --noconfirm ClickerClub.spec`.
